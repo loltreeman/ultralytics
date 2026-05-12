@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 3
+names: ['Aircraft', 'ship', 'vehicle']
+
+roboflow:
+  workspace: dalprs
+  project: skyfusion-kbssb
+  version: 1
+  license: MIT
+  url: https://universe.roboflow.com/dalprs/skyfusion-kbssb/dataset/1
