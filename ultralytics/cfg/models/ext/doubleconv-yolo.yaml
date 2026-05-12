@@ -1,0 +1,44 @@
+# Ultralytics YOLO26 model with a CoordAttBackbone backbone
+# Custom block: CoordDoubleConv — two Conv-BN-SiLU layers each followed by
+# coordinate attention, giving the backbone spatial context without heavy
+# transformer cost.  Mirrors the DraxNet-yolo26 head exactly.
+
+nc: 80       # number of classes (overridden by dataset yaml at train time)
+end2end: True
+reg_max: 1
+scales:
+  # [depth, width, max_channels]
+  n: [0.50, 0.25, 1024]
+  s: [0.50, 0.50, 1024]
+  m: [0.50, 1.00, 512]
+  l: [1.00, 1.00, 512]
+  x: [1.00, 1.50, 512]
+
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, CoordAttBackbone, [1024, [256, 512, 1024]]]  # 0 — returns [P3, P4, P5]
+  - [0,  1, Index, [256,  0]]                             # 1 — P3/8
+  - [0,  1, Index, [512,  1]]                             # 2 — P4/16
+  - [0,  1, Index, [1024, 2]]                             # 3 — P5/32
+  - [-1, 1, SPPF,  [1024, 5, 3, True]]                   # 4
+  - [-1, 2, C2PSA, [1024]]                                # 5
+
+# YOLO26 head — identical to draxnet-yolo26.yaml
+head:
+  - [-1,      1, nn.Upsample, [None, 2, "nearest"]]  # 6
+  - [[-1, 2], 1, Concat,      [1]]                   # 7  cat P4
+  - [-1,      2, C3k2,        [512, True]]            # 8
+
+  - [-1,      1, nn.Upsample, [None, 2, "nearest"]]  # 9
+  - [[-1, 1], 1, Concat,      [1]]                   # 10  cat P3
+  - [-1,      2, C3k2,        [256, True]]            # 11 (P3/8-small)
+
+  - [-1,      1, Conv,        [256, 3, 2]]            # 12
+  - [[-1, 8], 1, Concat,      [1]]                   # 13  cat head P4
+  - [-1,      2, C3k2,        [512, True]]            # 14 (P4/16-medium)
+
+  - [-1,      1, Conv,        [512, 3, 2]]            # 15
+  - [[-1, 5], 1, Concat,      [1]]                   # 16  cat head P5
+  - [-1,      1, C3k2,        [1024, True, 0.5, True]] # 17 (P5/32-large)
+
+  - [[11, 14, 17], 1, Detect, [nc]]                  # Detect(P3, P4, P5)

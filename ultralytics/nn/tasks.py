@@ -49,6 +49,7 @@ from ultralytics.nn.modules import (
     ConvTranspose,
     Detect,
     DraxNet,
+    CoordAttBackbone,
     DWConv,
     DWConvTranspose2d,
     Focus,
@@ -1720,6 +1721,9 @@ def parse_model(d, ch, verbose=True):
         elif m is CBFuse:
             c2 = ch[f[-1]]
         elif m is DraxNet:
+            c1, c2 = ch[f], args[0]
+            args = [c1, *args]
+        elif m is CoordAttBackbone:
             c1, c2 = ch[f], args[0]
             args = [c1, *args]
         elif m in frozenset({TorchVision, Index}):
