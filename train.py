@@ -1,13 +1,17 @@
 from ultralytics import YOLO
 
-model = YOLO("ultralytics/cfg/models/ext/coordatt-yolo26.yaml")
+if __name__ == '__main__':
+    model = YOLO("ultralytics/cfg/models/ext/coordatt-yolo26.yaml")
 
-results = model.train(
-    data="ultralytics\\ultralytics\\data\\skyfusion.v1i.yolov11\\data.yaml", 
-    epochs=50,
-    imgsz=640,
-    batch=16,
-    project="runs/final_project",
-    name="coordatt_exp",
-    plots=True,
-)
+    results = model.train(
+        # You should change this to the path where you downloaded the dataset
+        data="C:\\Users\\Christian\\Downloads\\ultralytics\\ultralytics\\data\\skyfusion.v1i.yolov11\\data.yaml",
+        epochs=10,
+        imgsz=640,
+        batch=2,
+        project="runs/final_project",
+        name="coordatt_exp2",
+        plots=True,
+        cache=False,
+        amp=True,
+    )

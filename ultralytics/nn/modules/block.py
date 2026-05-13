@@ -2508,33 +2508,33 @@ class CoordDoubleConv(nn.Module):
         super().__init__()
         # First conv-BN-SiLU
         self.conv1 = nn.Conv2d(c1, c2, kernel_size=3, padding=1, bias=False)
-        self.bn1   = nn.BatchNorm2d(c2)
-        self.act1  = nn.SiLU(inplace=True)
+        self.bn1 = nn.BatchNorm2d(c2)
+        self.act1 = nn.SiLU(inplace=True)
         # Coordinate-attention after first conv
         mip1 = max(8, c2 // 32)
         self.ca1_pool_h = nn.AdaptiveAvgPool2d((None, 1))
         self.ca1_pool_w = nn.AdaptiveAvgPool2d((1, None))
-        self.ca1_mid    = nn.Sequential(nn.Conv2d(c2, mip1, 1, bias=False), nn.BatchNorm2d(mip1), nn.SiLU(inplace=True))
-        self.ca1_h      = nn.Conv2d(mip1, c2, 1, bias=False)
-        self.ca1_w      = nn.Conv2d(mip1, c2, 1, bias=False)
+        self.ca1_mid = nn.Sequential(nn.Conv2d(c2, mip1, 1, bias=False), nn.BatchNorm2d(mip1), nn.SiLU(inplace=True))
+        self.ca1_h = nn.Conv2d(mip1, c2, 1, bias=False)
+        self.ca1_w = nn.Conv2d(mip1, c2, 1, bias=False)
         # Second conv-BN-SiLU
         self.conv2 = nn.Conv2d(c2, c2, kernel_size=3, padding=1, bias=False)
-        self.bn2   = nn.BatchNorm2d(c2)
-        self.act2  = nn.SiLU(inplace=True)
+        self.bn2 = nn.BatchNorm2d(c2)
+        self.act2 = nn.SiLU(inplace=True)
         # Coordinate-attention after second conv
         mip2 = max(8, c2 // 32)
         self.ca2_pool_h = nn.AdaptiveAvgPool2d((None, 1))
         self.ca2_pool_w = nn.AdaptiveAvgPool2d((1, None))
-        self.ca2_mid    = nn.Sequential(nn.Conv2d(c2, mip2, 1, bias=False), nn.BatchNorm2d(mip2), nn.SiLU(inplace=True))
-        self.ca2_h      = nn.Conv2d(mip2, c2, 1, bias=False)
-        self.ca2_w      = nn.Conv2d(mip2, c2, 1, bias=False)
+        self.ca2_mid = nn.Sequential(nn.Conv2d(c2, mip2, 1, bias=False), nn.BatchNorm2d(mip2), nn.SiLU(inplace=True))
+        self.ca2_h = nn.Conv2d(mip2, c2, 1, bias=False)
+        self.ca2_w = nn.Conv2d(mip2, c2, 1, bias=False)
  
     @staticmethod
     def _coord_gate(x, pool_h, pool_w, mid, proj_h, proj_w):
         _, _, h, w = x.shape
-        fh = pool_h(x)                              # (B, C, h, 1)
-        fw = pool_w(x).permute(0, 1, 3, 2)         # (B, C, 1, w) -> (B, C, w, 1)
-        f  = torch.cat([fh, fw], dim=2)             # (B, C, h+w, 1)
+        fh = pool_h(x) # (B, C, h, 1)
+        fw = pool_w(x).permute(0, 1, 3, 2) # (B, C, 1, w) -> (B, C, w, 1)
+        f  = torch.cat([fh, fw], dim=2) # (B, C, h+w, 1)
         f  = mid(f)
         fh, fw = torch.split(f, [h, w], dim=2)
         fw = fw.permute(0, 1, 3, 2)
@@ -2559,16 +2559,11 @@ class CoordAttBackbone(nn.Module):
     stage1: CoordDoubleConv    (64  -> 128)   -> MaxPool2d
     stage2: CoordDoubleConv    (128 -> 256)   -> MaxPool2d   [P3 source]
     stage3: CoordDoubleConv    (256 -> 512)   -> MaxPool2d   [P4 source]
-    stage4: CoordDoubleConv    (512 -> 1024)               [P5 source]
+    stage4: CoordDoubleConv    (512 -> 1024) [P5 source]
     p{3,4,5}_proj: 1x1 conv to requested out_channels
     """
  
-    def __init__(
-        self,
-        c1: int,
-        c2: int = 1024,
-        out_channels: tuple = (256, 512, 1024),
-    ) -> None:
+    def __init__(self, c1: int, c2: int = 1024, out_channels: tuple = (256, 512, 1024),) -> None:
         super().__init__()
         if len(out_channels) != 3:
             raise ValueError("out_channels must have exactly 3 entries (P3, P4, P5).")
@@ -2580,15 +2575,16 @@ class CoordAttBackbone(nn.Module):
             nn.SiLU(inplace=True),
         )
         self.stage1 = CoordDoubleConv(64,  128)
-        self.down1  = nn.MaxPool2d(2)
+        self.down1 = nn.MaxPool2d(2)
         self.stage2 = CoordDoubleConv(128, 256)
-        self.down2  = nn.MaxPool2d(2)
+        self.down2 = nn.MaxPool2d(2)
         self.stage3 = CoordDoubleConv(256, 512)
-        self.down3  = nn.MaxPool2d(2)
+        self.down3 = nn.MaxPool2d(2)
         self.stage4 = CoordDoubleConv(512, 1024)
+        self.drax4  = DraxBlock(1024, use_attention=True, efficient=True)
  
-        self.p3_proj = Conv(256,  out_channels[0], k=1, s=1)
-        self.p4_proj = Conv(512,  out_channels[1], k=1, s=1)
+        self.p3_proj = Conv(256, out_channels[0], k=1, s=1)
+        self.p4_proj = Conv(512, out_channels[1], k=1, s=1)
         self.p5_proj = Conv(1024, out_channels[2], k=1, s=1)
  
         self._init_weights()
@@ -2602,12 +2598,12 @@ class CoordAttBackbone(nn.Module):
                 nn.init.constant_(m.bias, 0)
  
     def forward(self, x: torch.Tensor) -> list:
-        x  = self.stem(x)
-        x  = self.stage1(x)
-        x  = self.down1(x)
+        x = self.stem(x)
+        x = self.stage1(x)
+        x = self.down1(x)
         p3 = self.stage2(x)
-        x  = self.down2(p3)
+        x = self.down2(p3)
         p4 = self.stage3(x)
-        x  = self.down3(p4)
+        x = self.down3(p4)
         p5 = self.stage4(x)
         return [self.p3_proj(p3), self.p4_proj(p4), self.p5_proj(p5)]

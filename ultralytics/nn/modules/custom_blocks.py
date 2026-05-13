@@ -39,19 +39,7 @@ class ChannelAttention(nn.Module):
 class ConvAttnLite(nn.Module):
     """CPU-friendly convolutional block with depthwise filtering and channel attention."""
 
-    def __init__(
-        self,
-        c1: int,
-        c2: int,
-        k: Union[Sequence[int], int] = 3,
-        s: Union[Sequence[int], int] = 1,
-        p=None,
-        g: int = 1,
-        d: Union[Sequence[int], int] = 1,
-        act=True,
-        expand_ratio: float = 1.5,
-        attn_reduction: Optional[int] = 16,
-    ) -> None:
+    def __init__(self, c1: int, c2: int, k: Union[Sequence[int], int] = 3, s: Union[Sequence[int], int] = 1, p=None, g: int = 1, d: Union[Sequence[int], int] = 1, act=True, expand_ratio: float = 1.5, attn_reduction: Optional[int] = 16,) -> None:
         super().__init__()
         if g != 1:
             raise ValueError("ConvAttnLite does not support grouped convolutions.")
@@ -157,20 +145,7 @@ class ConvAttnDeform(nn.Module):
 
     default_act = nn.SiLU()
 
-    def __init__(
-        self,
-        c1: int,
-        c2: int,
-        k: Union[Sequence[int], int] = 3,
-        s: Union[Sequence[int], int] = 1,
-        p=None,
-        g: int = 1,
-        d: Union[Sequence[int], int] = 1,
-        act=True,
-        deform_groups: int = 1,
-        attn_reduction: Optional[int] = 16,
-        zero_init_offset: bool = True,
-    ) -> None:
+    def __init__(self, c1: int, c2: int, k: Union[Sequence[int], int] = 3, s: Union[Sequence[int], int] = 1, p=None, g: int = 1, d: Union[Sequence[int], int] = 1, act=True, deform_groups: int = 1, attn_reduction: Optional[int] = 16, zero_init_offset: bool = True,) -> None:
         super().__init__()
         if DeformConv2d is None:  # pragma: no cover
             raise ImportError(
