@@ -2549,46 +2549,50 @@ class CoordDoubleConv(nn.Module):
  
  
 class CoordAttBackbone(nn.Module):
-    """Detection backbone built from CoordDoubleConv blocks.
- 
-    Produces three feature maps P3, P4, P5 for a YOLO FPN head.
- 
-    Architecture
-    ------------
-    stem  : 3x3 conv stride-2  (3 -> 64)
-    stage1: CoordDoubleConv    (64  -> 128)   -> MaxPool2d
-    stage2: CoordDoubleConv    (128 -> 256)   -> MaxPool2d   [P3 source]
-    stage3: CoordDoubleConv    (256 -> 512)   -> MaxPool2d   [P4 source]
-    stage4: CoordDoubleConv    (512 -> 1024) [P5 source]
-    p{3,4,5}_proj: 1x1 conv to requested out_channels
-    """
- 
-    def __init__(self, c1: int, c2: int = 1024, out_channels: tuple = (256, 512, 1024),) -> None:
+    """Lightweight CoordAttBackbone — coord attention only at deep stages (3+4)
+    to match DraxNet's parameter count while keeping spatial awareness."""
+
+    def __init__(self, c1: int, c2: int = 1024, out_channels: tuple = (256, 512, 1024)) -> None:
         super().__init__()
         if len(out_channels) != 3:
             raise ValueError("out_channels must have exactly 3 entries (P3, P4, P5).")
         self.c2 = c2
- 
+
         self.stem = nn.Sequential(
-            nn.Conv2d(c1, 64, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.Conv2d(c1, 64, kernel_size=7, stride=2, padding=3, bias=False),  # 7x7 like DraxNet
             nn.BatchNorm2d(64),
             nn.SiLU(inplace=True),
         )
-        self.stage1 = CoordDoubleConv(64,  128)
+        # Stages 1-2: plain double conv (lightweight like DraxNet's BasicResidualBlock)
+        self.stage1 = nn.Sequential(
+            nn.Conv2d(64, 128, 3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(128, 128, 3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.SiLU(inplace=True),
+        )
         self.down1 = nn.MaxPool2d(2)
-        self.stage2 = CoordDoubleConv(128, 256)
+        self.stage2 = nn.Sequential(
+            nn.Conv2d(128, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.SiLU(inplace=True),
+            nn.Conv2d(256, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.SiLU(inplace=True),
+        )
         self.down2 = nn.MaxPool2d(2)
+        # Stages 3-4: CoordDoubleConv (attention where it matters most)
         self.stage3 = CoordDoubleConv(256, 512)
-        self.down3 = nn.MaxPool2d(2)
+        self.down3  = nn.MaxPool2d(2)
         self.stage4 = CoordDoubleConv(512, 1024)
-        self.drax4  = DraxBlock(1024, use_attention=True, efficient=True)
- 
-        self.p3_proj = Conv(256, out_channels[0], k=1, s=1)
-        self.p4_proj = Conv(512, out_channels[1], k=1, s=1)
+
+        self.p3_proj = Conv(256,  out_channels[0], k=1, s=1)
+        self.p4_proj = Conv(512,  out_channels[1], k=1, s=1)
         self.p5_proj = Conv(1024, out_channels[2], k=1, s=1)
- 
+
         self._init_weights()
- 
+
     def _init_weights(self) -> None:
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -2596,14 +2600,14 @@ class CoordAttBackbone(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
- 
+
     def forward(self, x: torch.Tensor) -> list:
-        x = self.stem(x)
-        x = self.stage1(x)
-        x = self.down1(x)
+        x  = self.stem(x)
+        x  = self.stage1(x)
+        x  = self.down1(x)
         p3 = self.stage2(x)
-        x = self.down2(p3)
+        x  = self.down2(p3)
         p4 = self.stage3(x)
-        x = self.down3(p4)
+        x  = self.down3(p4)
         p5 = self.stage4(x)
         return [self.p3_proj(p3), self.p4_proj(p4), self.p5_proj(p5)]
